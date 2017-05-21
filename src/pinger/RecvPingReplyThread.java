@@ -6,7 +6,6 @@ import org.jnetpcap.PcapClosedException;
 import org.jnetpcap.packet.JPacket;
 import org.jnetpcap.packet.JPacketHandler;
 import org.jnetpcap.protocol.network.Icmp;
-import org.jnetpcap.protocol.network.Ip4;
 
 import global.Stator;
 

@@ -186,10 +186,6 @@ public class Ping {
 
     private static boolean isInSameSubNet(String targetIp) {
         String netMask = DDN.subnet_mask;
-        int a, b;
-        for (int i = 1; i <= 4; i++) {
-            a = Integer.parseInt(netMask.substring(0, netMask.indexOf(".") - 1));
-        }
         int netM = Util.ip2Int(netMask);
         int targetI = Util.ip2Int(targetIp);
         int senderI = Util.ip2Int(DDN.sender_ip);
