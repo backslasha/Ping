@@ -21,6 +21,7 @@ public class RecvPingReplyThread extends Thread {
     public RecvPingReplyThread(Pcap pcap, ReplyListener replyListener) {
         this.pcap = pcap;
         this.replyListener = replyListener;
+        setDaemon(true);
     }
 
     @Override
@@ -59,7 +60,7 @@ public class RecvPingReplyThread extends Thread {
             } catch (PcapClosedException ex) {
                 ex.printStackTrace();
             }
-            if (Stator.receive + Stator.lost == Stator.send) {
+            if (Stator.receive + Stator.lost == Stator.toSend) {
                 done = true;
             }
         }

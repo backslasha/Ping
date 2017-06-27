@@ -1,6 +1,7 @@
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -32,6 +33,25 @@ public class Ping {
 
         if (args.length == 0) {
             throw new Exception("params illgal.");
+        } else if (args.length >= 1) {
+            if (args[args.length-1].matches("[a-zA-Z0-9].*+")) {
+                try {
+                    InetAddress inetAddress = InetAddress.getByName(args[args.length-1]);
+                    args[args.length-1] = inetAddress.getHostAddress();
+                } catch (UnknownHostException e) {
+                    System.out.println("invalid host name!");
+                    return;
+                }
+            }
+        }
+        if (args.length == 2) {
+            args[0] = args[0].substring(args[0].indexOf("-") + 1);
+            char param = args[0].charAt(0);
+            switch (param) {
+            case 't':
+                Stator.init(9999);
+                break;
+            }
         }
 
         // 获取网络适配器实例
@@ -43,9 +63,9 @@ public class Ping {
         // 获取本地 mac 地址和 ip 地址的点分十进制字符串
         String str1 = device.getAddresses().get(0).getAddr().toString();
         String str2 = device.getAddresses().get(0).getNetmask().toString();
-        DDN.target_ip = args[0];
+        DDN.target_ip = args[args.length-1];
         DDN.sender_ip = str1.substring(str1.indexOf(":") + 1, str1.indexOf("]"));
-        DDN.subnet_mask = str2.substring(str2.indexOf(":") + 1, str2.indexOf("]"));
+        DDN.subnet_mask = str2.substring(str2.indexOf(":")  + 1, str2.indexOf("]"));
         DDN.gateway_ip = getGateWayIpDDN(DDN.sender_ip);
         DDN.sender_mac = Util.hex2DDN(Util.byteArrayToHexString(device.getHardwareAddress()));
 
@@ -56,7 +76,6 @@ public class Ping {
         BTA.sender_mac = device.getHardwareAddress();
         BTA.target_mac = getTargetMacBytes(pcap);
 
-        Stator.init(4);
         // 子线程开始监听 ping reply 报文
         new RecvPingReplyThread(pcap, new RecvPingReplyThread.ReplyListener() {
             @Override
@@ -65,21 +84,26 @@ public class Ping {
                 Stator.receive++;
                 Stator.minRrt = (int) (Stator.minRrt < rrt ? Stator.minRrt : rrt);
                 Stator.maxRrt = (int) (Stator.maxRrt > rrt ? Stator.maxRrt : rrt);
-                Stator.accumulator += rrt;
+                Stator.rrtAccumulator += rrt;
                 printReplyMsg(packet, rrt);
             }
         }).start();
 
         // 创建 ping 报文
         JPacket packet = createPingRequest();
+        
+        // crtl c 事件
+        Runtime.getRuntime().addShutdownHook(new ExitHandler());
 
         // 发送我们的 ping request 报文
         System.out.println("Ping " + DDN.target_ip + " with 32 bytes' payload :");
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < Stator.toSend; i++) {
             if (Pcap.OK != pcap.sendPacket(packet)) {
                 System.err.println(pcap.getErr());
             }
 
+            Stator.sent++;
+            
             stopWatch.start();
 
             Thread.sleep(1000);
@@ -102,10 +126,10 @@ public class Ping {
 
         }
 
-        int average = Stator.receive != 0 ? Stator.accumulator / Stator.receive : -1;
+        int average = Stator.receive != 0 ? Stator.rrtAccumulator / Stator.receive : -1;
         System.out.println("\nStatistics of Ping at " + DDN.target_ip + ":");
-        System.out.println("    packets: send = " + Stator.send + ", received = " + Stator.receive + ", lost = "
-                + Stator.lost + "(" + ((float) (Stator.lost)) / ((float) (Stator.send)) * 100 + "% lost),");
+        System.out.println("    packets: send = " + Stator.toSend + ", received = " + Stator.receive + ", lost = "
+                + Stator.lost + "(" + ((float) (Stator.lost)) / ((float) (Stator.toSend)) * 100 + "% lost),");
         System.out.println("rrt(unit: ms):");
         System.out.println(
                 "shortest = " + Stator.minRrt + "ms, longest = " + Stator.maxRrt + "ms, average = " + average + "ms");
@@ -257,5 +281,18 @@ public class Ping {
         }
 
         return target_mac;
+    }
+
+    
+}
+ class ExitHandler extends Thread {
+    public void run() {
+        int average = Stator.receive != 0 ? Stator.rrtAccumulator / Stator.receive : -1;
+        System.out.println("\nStatistics of Ping at " + DDN.target_ip + ":");
+        System.out.println("    packets: send = " + Stator.sent + ", received = " + Stator.receive + ", lost = "
+                + Stator.lost + "(" + ((float) (Stator.lost)) / ((float) (Stator.sent)) * 100 + "% lost),");
+        System.out.println("rrt(unit: ms):");
+        System.out.println("shortest = " + Stator.minRrt + "ms, longest = " + Stator.maxRrt + "ms, average = "
+                + average + "ms");
     }
 }
